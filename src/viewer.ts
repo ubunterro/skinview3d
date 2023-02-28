@@ -272,8 +272,9 @@ export class SkinViewer {
 	readonly fxaaPass: ShaderPass;
 
 	readonly skinCanvas: HTMLCanvasElement;
-	readonly capeCanvas: HTMLCanvasElement;
+	readonly capeSpritesCanvas: HTMLCanvasElement[] = [];
 	readonly earsCanvas: HTMLCanvasElement;
+
 	private skinTexture: Texture | null = null;
 	private capeTexture: Texture | null = null;
 	private earsTexture: Texture | null = null;
@@ -317,7 +318,6 @@ export class SkinViewer {
 		this.canvas = options.canvas === undefined ? document.createElement("canvas") : options.canvas;
 
 		this.skinCanvas = document.createElement("canvas");
-		this.capeCanvas = document.createElement("canvas");
 		this.earsCanvas = document.createElement("canvas");
 
 		this.scene = new Scene();
@@ -465,11 +465,11 @@ export class SkinViewer {
 		this.playerObject.skin.map = this.skinTexture;
 	}
 
-	private recreateCapeTexture(): void {
+	private recreateCapeTexture(canvas: HTMLCanvasElement): void {
 		if (this.capeTexture !== null) {
 			this.capeTexture.dispose();
 		}
-		this.capeTexture = new CanvasTexture(this.capeCanvas);
+		this.capeTexture = new CanvasTexture(canvas);
 		this.capeTexture.magFilter = NearestFilter;
 		this.capeTexture.minFilter = NearestFilter;
 		this.playerObject.cape.map = this.capeTexture;
@@ -540,16 +540,21 @@ export class SkinViewer {
 	private capeOptions: CapeLoadOptions = {}
 	private totalFrames = 1;
 	private currentFrame = 1;
+
 	animatedCape(): void {
 		const currentTime: number = Date.now();
-		if(this.lastFrameTime + +this._frameDelay > currentTime) return;
+		if (this.lastFrameTime + +this._frameDelay > currentTime) return;
 		this.lastFrameTime = currentTime
 
-		if(this.capeSource != null && this.totalFrames > 1) {
-			this.loadCape(this.capeSource, this.capeOptions)
+		if (this.capeSource != null && this.totalFrames > 1) {
+			this.recreateCapeTexture(this.capeSpritesCanvas[this.currentFrame]);
 
 			//Increase frames
 			this.currentFrame++;
+
+			if (this.currentFrame > this.totalFrames) {
+				this.currentFrame = 1;
+			}
 		}
 	}
 
@@ -577,19 +582,23 @@ export class SkinViewer {
 		} else if (isTextureSource(source)) {
 			this.capeSource = source;
 			this.capeOptions = options;
-			this.totalFrames = source.height / (source.width / 2)
+			this.totalFrames = source.height / (source.width / 2);
 
-			if(!Number.isInteger(this.totalFrames)) {
+			if (!Number.isInteger(this.totalFrames)) {
 				this.totalFrames = 1;
 			}
 
-			if(this.currentFrame > this.totalFrames) {
-				this.currentFrame = 1;
+			if (this.totalFrames > 1) {
+				// Cape is animated, we need to load its sprites onto canvas
+				for (let frame = 0; frame <= this.totalFrames; frame++) {
+					this.capeSpritesCanvas[frame] = document.createElement("canvas");
+				}
+			} else {
+				this.capeSpritesCanvas[0] = document.createElement("canvas");
 			}
 
-			loadCapeToCanvas(this.capeCanvas, source, this.currentFrame);
-
-			this.recreateCapeTexture();
+			loadCapeToCanvas(this.capeSpritesCanvas, source);
+			this.recreateCapeTexture(this.capeSpritesCanvas[0]);
 
 			if (options.makeVisible !== false) {
 				this.playerObject.backEquipment = options.backEquipment === undefined ? "cape" : options.backEquipment;
